@@ -1,0 +1,38 @@
+# Байткод и кеш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Виртуальные окружения
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Сборка и дистрибутивы
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Кеш тестов и инструментов анализа
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# Редакторы, IDE и ОС
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
