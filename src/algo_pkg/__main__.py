@@ -12,7 +12,7 @@ from algo_pkg.generators import (
     sorted_list,
 )
 from algo_pkg.recurrence import fibonacci_iterative, fibonacci_recursive
-from algo_pkg.sorting import heap_sort, insertion_sort
+from algo_pkg.sorting import heap_sort, insertion_sort, radix_sort
 from algo_pkg.structures import EmptyStackError, Stack
 
 # генераторы тестовых данных
@@ -25,7 +25,7 @@ GENERATORS = {
 }
 
 # алгоритмы сортировки
-SORTS = {"insertion": insertion_sort, "heap": heap_sort}
+SORTS = {"insertion": insertion_sort, "heap": heap_sort, "radix": radix_sort}
 
 
 def _run_fib(n: int, mode: str) -> None:
@@ -46,7 +46,7 @@ def _run_sort(algo: str, dataset: str, size: int, seed: int | None) -> None:
     expected = sorted(data)
     print(f"\nВход ({dataset}, n={size}, seed={actual_seed}):\n{data}")
 
-    targets = SORTS.items() if algo == "both" else [(algo, SORTS[algo])]
+    targets = SORTS.items() if algo in ("both", "all") else [(algo, SORTS[algo])]
     for name, fn in targets:
         t0 = time.perf_counter()
         res = fn(data)
@@ -89,11 +89,11 @@ def _run_gen(gen_type: str, size: int, seed: int | None) -> None:
     actual_seed = seed if seed is not None else random.randint(1, 1_000_000)
     data = GENERATORS[gen_type](size, seed=actual_seed)
     desc_map = {
-        "random": "Случайные числа (от -1 млн до 1 млн): базовый тест для проверки среднего случая.",
-        "sorted": "Отсортированный список: лучший случай для insertion_sort (O(n)).",
-        "reversed": "Обратный порядок (по убыванию): худший случай для insertion_sort (O(n²)).",
-        "nearly_sorted": "Почти отсортированный список (с несколькими перестановками): проверка устойчивости.",
-        "duplicates": "Список с повторяющимися значениями: проверка поведения при одинаковых элементах.",
+        "random": "Случайные числа (от -1 млн до 1 млн): базовый тест для проверки среднего случая",
+        "sorted": "Отсортированный список: лучший случай для insertion_sort (O(n))",
+        "reversed": "Обратный порядок (по убыванию): худший случай для insertion_sort (O(n^2))",
+        "nearly_sorted": "Почти отсортированный список (с несколькими перестановками): проверка устойчивости",
+        "duplicates": "Список с повторяющимися значениями: проверка поведения при одинаковых элементах",
     }
     print(f"\n[Генератор: {gen_type}]")
     print(f"Назначение: {desc_map.get(gen_type, '')}")
@@ -115,7 +115,7 @@ def _ask_seed() -> str | None:
         raw_seed = input("Введите целое число для seed: ").strip()
         if raw_seed.lstrip("-").isdigit():
             return raw_seed
-        print("Некорректный ввод, будет сгенерирован случайный seed.")
+        print("Некорректный ввод, будет сгенерирован случайный seed")
     return None
 
 
@@ -147,8 +147,19 @@ def _interactive_argv() -> list[str]:
         ds_map = {"1": "random", "2": "sorted", "3": "reversed", "4": "nearly_sorted", "5": "duplicates"}
         dataset = ds_map.get(ds_choice, "random")
 
+        print(
+            "\nВыберите алгоритм сортировки:\n"
+            "  1. Все алгоритмы (all: insertion, heap, radix)\n"
+            "  2. Пирамидальная (heap)\n"
+            "  3. Поразрядная (radix)\n"
+            "  4. Вставками (insertion)"
+        )
+        a_choice = input("Алгоритм [1-4, по умолчанию 1]: ").strip()
+        a_map = {"1": "all", "2": "heap", "3": "radix", "4": "insertion"}
+        algo = a_map.get(a_choice, "all")
+
         raw_size = input("Количество чисел в массиве [по умолчанию 20]: ").strip()
-        args = ["sort", "--dataset", dataset]
+        args = ["sort", "--algo", algo, "--dataset", dataset]
         if raw_size.isdigit() and int(raw_size) >= 0:
             args.extend(["--size", raw_size])
 
@@ -168,11 +179,11 @@ def _interactive_argv() -> list[str]:
     if cmd == "gen":
         print(
             "\nВыберите тип генерируемого набора:\n"
-            "  1. random - случайные числа от -1 млн до 1 млн\n"
-            "  2. sorted - отсортированный по возрастанию\n"
-            "  3. reversed - отсортированный по убыванию\n"
-            "  4. nearly_sorted - почти отсортированный\n"
-            "  5. duplicates - с большим количеством дубликатов"
+            "  1 random - случайные числа от -1 млн до 1 млн\n"
+            "  2 sorted - отсортированный по возрастанию\n"
+            "  3 reversed - отсортированный по убыванию\n"
+            "  4 nearly_sorted - почти отсортированный\n"
+            "  5 duplicates - с большим количеством дубликатов"
         )
         g_choice = input("Номер [1-5, по умолчанию 1]: ").strip()
         g_map = {"1": "random", "2": "sorted", "3": "reversed", "4": "nearly_sorted", "5": "duplicates"}
@@ -191,12 +202,25 @@ def _interactive_argv() -> list[str]:
 
     if cmd == "bench":
         raw_rep = input("Количество повторов [по умолчанию 5]: ").strip()
+        raw_timeout = input(
+            "Лимит отсечки по времени в секундах (число float) [по умолчанию 3.0]: "
+        ).strip()
         args = ["bench"]
         if raw_rep.isdigit() and int(raw_rep) > 0:
             args.extend(["--repeats", raw_rep])
+        if raw_timeout:
+            try:
+                timeout_val = float(raw_timeout.replace(",", "."))
+                if timeout_val > 0:
+                    args.extend(["--timeout", str(timeout_val)])
+            except ValueError:
+                print("Некорректное значение отсечки, будет использовано 3.0 с")
+        seed = _ask_seed()
+        if seed is not None:
+            args.extend(["--seed", seed])
+        else:
+            args.extend(["--seed", str(random.randint(1, 1_000_000))])
         return args
-
-    return [cmd]
 
     return [cmd]
 
@@ -213,7 +237,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # подкоманда для сортировок
     p_sort = sub.add_parser("sort", help="Проверить сортировки")
-    p_sort.add_argument("--algo", choices=("insertion", "heap", "both"), default="both")
+    p_sort.add_argument("--algo", choices=("insertion", "heap", "radix", "both", "all"), default="all")
     p_sort.add_argument("--dataset", choices=tuple(GENERATORS), default="random")
     p_sort.add_argument("--size", type=int, default=20)
     p_sort.add_argument("--seed", type=int, default=None)
@@ -232,6 +256,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench = sub.add_parser("bench", help="Запустить бенчмарк")
     p_bench.add_argument("--repeats", type=int, default=5)
     p_bench.add_argument("--sizes", nargs="+", type=int, default=None)
+    p_bench.add_argument(
+        "--timeout",
+        "--max-single-sec",
+        dest="timeout",
+        type=float,
+        default=3.0,
+        help="Лимит отсечки по времени в секундах (float)",
+    )
+    p_bench.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed для воспроизводимости данных (по умолчанию 42)",
+    )
     p_bench.add_argument("--output", type=str, default="benchmark_results.md")
 
     # подкоманда для тестов
@@ -261,7 +299,13 @@ def main(argv: list[str] | None = None) -> None:
             _run_gen(args.type, args.size, args.seed)
         case "bench":
             sizes = tuple(args.sizes) if args.sizes else SIZES
-            run_benchmark(repeats=args.repeats, sizes=sizes, output_file=args.output)
+            run_benchmark(
+                repeats=args.repeats,
+                sizes=sizes,
+                max_single_sec=args.timeout,
+                seed=args.seed,
+                output_file=args.output,
+            )
         case "test":
             _run_tests(args.target)
 

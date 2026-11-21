@@ -1,4 +1,5 @@
 from collections.abc import Callable, Iterable
+from itertools import chain
 from typing import Any
 
 # тип функции для извлечения ключа сравнения
@@ -61,3 +62,50 @@ def heap_sort[T](items: Iterable[T], *, key: KeyFunc[T] | None = None) -> list[T
         keys[0], keys[end] = keys[end], keys[0]
         sift_down(0, end)
     return arr
+
+
+def radix_sort(arr: list[int] | Iterable[int], *, bits: int = 8) -> list[int]:
+    res_input = list(arr)
+    if len(res_input) <= 1:
+        return list(res_input)
+
+    min_val = min(res_input)
+    max_val = max(res_input)
+    if min_val == max_val:
+        return list(res_input)
+
+    # Если есть отрицательные числа, сдвигаем диапазон в неотрицательную область
+    offset = min(0, min_val)
+    if offset:
+        res = [x - offset for x in res_input]
+        max_val -= offset
+    else:
+        res = list(res_input)
+
+    base = 1 << bits
+    mask = base - 1
+    from_iter = chain.from_iterable
+
+    buckets: list[list[int]] = [[] for _ in range(base)]
+    # Кэшируем ссылки на метод .append для ускорения цикла
+    appends = [b.append for b in buckets]
+
+    # Первый проход (shift == 0 — экономим на битовом сдвиге)
+    for x in res:
+        appends[x & mask](x)
+    res = list(from_iter(buckets))
+
+    # Остальные проходы
+    shift = bits
+    while max_val >> shift:
+        for b in buckets:
+            b.clear()
+        for x in res:
+            appends[(x >> shift) & mask](x)
+        res = list(from_iter(buckets))
+        shift += bits
+
+    if offset:
+        res = [x + offset for x in res]
+
+    return res

@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+from algo_pkg.benchmark import measure, run_benchmark
 from algo_pkg.generators import (
     many_duplicates_list,
     nearly_sorted_list,
@@ -10,11 +11,12 @@ from algo_pkg.generators import (
     sorted_list,
 )
 from algo_pkg.recurrence import fibonacci_iterative, fibonacci_recursive
-from algo_pkg.sorting import heap_sort, insertion_sort
+from algo_pkg.sorting import heap_sort, insertion_sort, radix_sort
 from algo_pkg.structures import EmptyStackError, Stack
 
 # список сортировок для прогона тестов
-SORTS = [insertion_sort, heap_sort]
+ALL_SORTS = [insertion_sort, heap_sort, radix_sort]
+COMPARISON_SORTS = [insertion_sort, heap_sort]
 
 
 # тесты для чисел фибоначчи
@@ -34,7 +36,7 @@ def test_fibonacci(fib):
 
 
 # тесты сортировок на граничных случаях
-@pytest.mark.parametrize("sort_fn", SORTS)
+@pytest.mark.parametrize("sort_fn", ALL_SORTS)
 @pytest.mark.parametrize(
     "data",
     [
@@ -52,7 +54,7 @@ def test_sorts_edge_cases(sort_fn, data):
 
 
 # проверка что сортировка случайных списков совпадает со встроенной sorted
-@pytest.mark.parametrize("sort_fn", SORTS)
+@pytest.mark.parametrize("sort_fn", ALL_SORTS)
 @pytest.mark.parametrize("seed", [1, 42, 999])
 def test_sorts_random_matches_builtin(sort_fn, seed):
     data = random_list(250, seed=seed)
@@ -61,14 +63,23 @@ def test_sorts_random_matches_builtin(sort_fn, seed):
     assert data == original
 
 
-# проверка работы параметра key и ошибок при несовместимых типах
-@pytest.mark.parametrize("sort_fn", SORTS)
+# проверка работы параметра key и ошибок при несовместимых типах для сортировок на сравнениях
+@pytest.mark.parametrize("sort_fn", COMPARISON_SORTS)
 def test_sort_key_and_type_error(sort_fn):
     assert sort_fn(["bbb", "a", "cc"], key=len) == ["a", "cc", "bbb"]
     assert sort_fn([-10, 2, -5], key=abs) == [2, -5, -10]
 
     with pytest.raises(TypeError):
         sort_fn([1, "two"])  # type: ignore[list-item]
+
+
+# проверка поразрядной сортировки с разным размером корзин (bits)
+@pytest.mark.parametrize("bits", [4, 8, 11])
+def test_radix_sort_bits_and_stability(bits):
+    data = random_list(1000, seed=42)
+    assert radix_sort(data, bits=bits) == sorted(data)
+    # проверка на списке с одинаковыми элементами
+    assert radix_sort([7, 7, 7, 7], bits=bits) == [7, 7, 7, 7]
 
 
 # проверка базовых операций со стеком и ошибок
@@ -130,3 +141,40 @@ def test_generators_reproducibility_and_isolation(gen):
 @pytest.mark.parametrize("gen", [random_list, nearly_sorted_list, many_duplicates_list])
 def test_generators_different_seeds(gen):
     assert gen(100, seed=1) != gen(100, seed=2)
+
+
+# тесты для модуля бенчмарка
+def test_benchmark_measure_and_isolation():
+    data = [5, 2, 8, 1, 9]
+    original = data.copy()
+    avg = measure(insertion_sort, data, repeats=3, max_single_sec=1.0)
+    assert isinstance(avg, float)
+    assert avg >= 0.0
+    # исходный массив не должен быть изменен
+    assert data == original
+
+
+def test_benchmark_timeout_trigger():
+    data = list(range(1000, 0, -1))
+    # ставим микроскопический лимит времени чтобы спровоцировать отсечку
+    avg = measure(insertion_sort, data, repeats=2, max_single_sec=0.000000001)
+    assert avg is None
+
+
+def test_benchmark_run_small_table():
+    md = run_benchmark(repeats=1, sizes=(10, 20), max_single_sec=2.5, seed=42, output_file=None)
+    assert "# Результаты бенчмарка алгоритмов сортировки" in md
+    assert "Лимит отсечки для $O(n^2)$:** 2.5 с" in md
+    assert "Seed:** 42" in md
+    assert "| Dataset | Size | Seed | insertion_sort (s) | heap_sort (s) | radix_sort (s) |" in md
+    assert "| random | 10 | 42 |" in md
+
+
+def test_benchmark_seed_reproducibility():
+    md1 = run_benchmark(repeats=1, sizes=(10,), max_single_sec=2.5, seed=12345, output_file=None)
+    md2 = run_benchmark(repeats=1, sizes=(10,), max_single_sec=2.5, seed=12345, output_file=None)
+    assert "| random | 10 | 12345 |" in md1
+    assert "Seed:** 12345" in md1
+    assert md1 == md2
+
+
