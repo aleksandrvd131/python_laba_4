@@ -47,13 +47,21 @@ def _run_sort(algo: str, dataset: str, size: int, seed: int | None) -> None:
     print(f"\nВход ({dataset}, n={size}, seed={actual_seed}):\n{data}")
 
     targets = SORTS.items() if algo in ("both", "all") else [(algo, SORTS[algo])]
+    timings: list[tuple[str, float, float, str]] = []
     for name, fn in targets:
         t0 = time.perf_counter()
         res = fn(data)
-        dt = (time.perf_counter() - t0) * 1000
+        dt_sec = time.perf_counter() - t0
+        dt_ms = dt_sec * 1000
         # сверяем результат со стандартной сортировкой питона
         status = "OK" if res == expected else "MISMATCH"
-        print(f"{name:10} [{status}, {dt:.3f} ms]: {res}")
+        print(f"{name:10} [{status}, {dt_ms:.3f} ms / {dt_sec:.6f} с]: {res}")
+        timings.append((name, dt_sec, dt_ms, status))
+
+    print()
+    for name, dt_sec, dt_ms, status in timings:
+        print(f"{name:10} [{status}, {dt_ms:.3f} ms / {dt_sec:.6f} с]")
+
     print(f"\n[Воспроизводимость] Чтобы повторить этот же набор, используйте seed={actual_seed}:")
     print(f"  algo sort --dataset {dataset} --size {size} --seed {actual_seed}")
 

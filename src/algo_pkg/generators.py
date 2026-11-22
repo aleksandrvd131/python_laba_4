@@ -4,8 +4,8 @@ import random
 def random_list(
     n: int,
     *,
-    min_val: int = -1_000_000,
-    max_val: int = 1_000_000,
+    min_val: int = -100000000,
+    max_val: int = 100000000,
     seed: int | None = None,
 ) -> list[int]:
     # список случайных чисел размера n от min_val до max_val (по умолчанию от -1 000 000 до 1 000 000)

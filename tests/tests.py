@@ -175,6 +175,10 @@ def test_benchmark_seed_reproducibility():
     md2 = run_benchmark(repeats=1, sizes=(10,), max_single_sec=2.5, seed=12345, output_file=None)
     assert "| random | 10 | 12345 |" in md1
     assert "Seed:** 12345" in md1
-    assert md1 == md2
+    # Сравниваем структуру строк (Dataset, Size, Seed), так как физическое время выполнения
+    # может незначительно колебаться на уровне микросекунд между запусками
+    rows1 = [line.split("|")[:4] for line in md1.splitlines() if line.startswith("| ")]
+    rows2 = [line.split("|")[:4] for line in md2.splitlines() if line.startswith("| ")]
+    assert rows1 == rows2
 
 
