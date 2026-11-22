@@ -8,7 +8,6 @@ def insertion_sort[T](items: Iterable[T], *, key: KeyFunc[T] | None = None) -> l
     # обычная сортировка вставками
     a = list(items)
     k = key or (lambda x: x)
-    # по-питонски через enumerate вместо range(1, len(a)) и a[i]
     for i, val in enumerate(a[1:], start=1):
         j = i - 1
         # пока элемент слева больше текущего, двигаем его вправо

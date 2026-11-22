@@ -1,5 +1,5 @@
 def _check_n(n: int) -> None:
-    # ловушка питона: bool это наследник int, проверяем строго через type
+    # ловушка питона bool это наследник int, проверяем строго через type
     if type(n) is not int:
         raise TypeError("n должно быть int, никаких флоатов и булов")
     if n < 0:

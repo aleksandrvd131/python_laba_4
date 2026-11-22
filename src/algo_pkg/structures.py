@@ -25,7 +25,6 @@ class Stack[T]:
         return len(self.data)
 
     def __bool__(self) -> bool:
-        # по-питонски: пустой список сам по себе False
         return bool(self.data)
 
     def __repr__(self) -> str:
