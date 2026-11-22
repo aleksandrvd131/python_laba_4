@@ -1,39 +1,32 @@
 class EmptyStackError(IndexError):
-    # исключение если пытаемся достать что-то из пустого стека
+    # ошибка когда стек пустой
     pass
 
 
 class Stack[T]:
-    # реализация стека поверх стандартного списка питона
-
+    # реализация LIFO стека на списках
     def __init__(self) -> None:
-        # внутри храним элементы в обычном списке
-        self._items: list[T] = []
+        self.data: list[T] = []
 
     def push(self, item: T) -> None:
-        # кладем элемент на вершину стека
-        self._items.append(item)
+        self.data.append(item)
 
     def pop(self) -> T:
-        # достаем и удаляем верхний элемент если стек не пустой
-        if not self._items:
-            raise EmptyStackError("pop из пустого стека")
-        return self._items.pop()
+        if not self.data:
+            raise EmptyStackError("нельзя делать pop из пустого стека")
+        return self.data.pop()
 
     def peek(self) -> T:
-        # просто смотрим верхний элемент без удаления
-        if not self._items:
-            raise EmptyStackError("peek из пустого стека")
-        return self._items[-1]
+        if not self.data:
+            raise EmptyStackError("стек пустой")
+        return self.data[-1]
 
     def __len__(self) -> int:
-        # размер стека
-        return len(self._items)
+        return len(self.data)
 
     def __bool__(self) -> bool:
-        # проверка пустой стек или нет
-        return bool(self._items)
+        # по-питонски: пустой список сам по себе False
+        return bool(self.data)
 
     def __repr__(self) -> str:
-        # строковое представление для отладки
-        return f"Stack({self._items!r})"
+        return f"Stack({self.data})"

@@ -115,8 +115,8 @@ def _ask_seed() -> str | None:
     # запрос режима работы с seed для воспроизводимости
     print(
         "\nРежим seed (воспроизводимость):\n"
-        "  1. Сгенерировать новый случайный seed\n"
-        "  2. Ввести свой seed вручную (для повтора данных)"
+        "  1 Сгенерировать новый случайный seed\n"
+        "  2 Ввести свой seed вручную (для повтора данных)"
     )
     choice = input("Выбор [1/2, по умолчанию 1]: ").strip()
     if choice == "2":
@@ -132,105 +132,112 @@ def _interactive_argv() -> list[str]:
     menu = {"1": "fib", "2": "sort", "3": "stack", "4": "gen", "5": "bench", "6": "test"}
     print(
         "Выберите модуль для проверки:\n"
-        "  1. Фибоначчи (fib)\n"
-        "  2. Сортировки (sort)\n"
-        "  3. Стек (stack)\n"
-        "  4. Генераторы наборов (gen)\n"
-        "  5. Бенчмарк (bench)\n"
-        "  6. Автотесты pytest (test)"
+        "  1 Фибоначчи (fib)\n"
+        "  2 Сортировки (sort)\n"
+        "  3 Стек (stack)\n"
+        "  4 Генераторы наборов (gen)\n"
+        "  5 Бенчмарк (bench)\n"
+        "  6 Автотесты pytest (test)"
     )
     raw_choice = input("Номер [1-6]: ").strip()
     cmd = menu.get(raw_choice, "test")
 
-    if cmd == "sort":
-        print(
-            "\nВыберите тип входного набора данных:\n"
-            "  1. random (случайный)\n"
-            "  2. sorted (отсортированный, O(n) для вставок)\n"
-            "  3. reversed (обратный порядок, худший случай O(n²))\n"
-            "  4. nearly_sorted (почти отсортированный)\n"
-            "  5. duplicates (множество одинаковых значений)"
-        )
-        ds_choice = input("Тип набора [1-5, по умолчанию 1]: ").strip()
-        ds_map = {"1": "random", "2": "sorted", "3": "reversed", "4": "nearly_sorted", "5": "duplicates"}
-        dataset = ds_map.get(ds_choice, "random")
+    match cmd:
+        case "sort":
+            print(
+                "\nВыберите тип входного набора данных:\n"
+                "  1 random (случайный)\n"
+                "  2 sorted (отсортированный, O(n) для вставок)\n"
+                "  3 reversed (обратный порядок, худший случай O(n²))\n"
+                "  4 nearly_sorted (почти отсортированный)\n"
+                "  5 duplicates (множество одинаковых значений)"
+            )
+            ds_choice = input("Тип набора [1-5, по умолчанию 1]: ").strip()
+            ds_map = {"1": "random", "2": "sorted", "3": "reversed", "4": "nearly_sorted", "5": "duplicates"}
+            dataset = ds_map.get(ds_choice, "random")
 
-        print(
-            "\nВыберите алгоритм сортировки:\n"
-            "  1. Все алгоритмы (all: insertion, heap, radix)\n"
-            "  2. Пирамидальная (heap)\n"
-            "  3. Поразрядная (radix)\n"
-            "  4. Вставками (insertion)"
-        )
-        a_choice = input("Алгоритм [1-4, по умолчанию 1]: ").strip()
-        a_map = {"1": "all", "2": "heap", "3": "radix", "4": "insertion"}
-        algo = a_map.get(a_choice, "all")
+            print(
+                "\nВыберите алгоритм сортировки:\n"
+                "  1 Все алгоритмы (all: insertion, heap, radix)\n"
+                "  2 Пирамидальная (heap)\n"
+                "  3 Поразрядная (radix)\n"
+                "  4 Вставками (insertion)"
+            )
+            a_choice = input("Алгоритм [1-4, по умолчанию 1]: ").strip()
+            a_map = {"1": "all", "2": "heap", "3": "radix", "4": "insertion"}
+            algo = a_map.get(a_choice, "all")
 
-        raw_size = input("Количество чисел в массиве [по умолчанию 20]: ").strip()
-        args = ["sort", "--algo", algo, "--dataset", dataset]
-        if raw_size.isdigit() and int(raw_size) >= 0:
-            args.extend(["--size", raw_size])
+            raw_size = input("Количество чисел в массиве [по умолчанию 20]: ").strip()
+            args = ["sort", "--algo", algo, "--dataset", dataset]
+            if raw_size.isdigit() and int(raw_size) >= 0:
+                args.extend(["--size", raw_size])
 
-        seed = _ask_seed()
-        if seed is not None:
-            args.extend(["--seed", seed])
+            seed = _ask_seed()
+            if seed is not None:
+                args.extend(["--seed", seed])
 
-        return args
+            return args
 
-    if cmd == "fib":
-        raw_n = input("Число n для Фибоначчи [по умолчанию 10]: ").strip()
-        args = ["fib"]
-        if raw_n.isdigit():
-            args.append(raw_n)
-        return args
+        case "fib":
+            raw_n = input("Число n для Фибоначчи [по умолчанию 10]: ").strip()
+            args = ["fib"]
+            if raw_n.isdigit():
+                args.append(raw_n)
+            return args
 
-    if cmd == "gen":
-        print(
-            "\nВыберите тип генерируемого набора:\n"
-            "  1 random - случайные числа от -1 млн до 1 млн\n"
-            "  2 sorted - отсортированный по возрастанию\n"
-            "  3 reversed - отсортированный по убыванию\n"
-            "  4 nearly_sorted - почти отсортированный\n"
-            "  5 duplicates - с большим количеством дубликатов"
-        )
-        g_choice = input("Номер [1-5, по умолчанию 1]: ").strip()
-        g_map = {"1": "random", "2": "sorted", "3": "reversed", "4": "nearly_sorted", "5": "duplicates"}
-        gen_type = g_map.get(g_choice, "random")
+        case "gen":
+            print(
+                "\nВыберите тип генерируемого набора:\n"
+                "  1 random - случайные числа от -1 млн до 1 млн\n"
+                "  2 sorted - отсортированный по возрастанию\n"
+                "  3 reversed - отсортированный по убыванию\n"
+                "  4 nearly_sorted - почти отсортированный\n"
+                "  5 duplicates - с большим количеством дубликатов"
+            )
+            g_choice = input("Номер [1-5, по умолчанию 1]: ").strip()
+            g_map = {"1": "random", "2": "sorted", "3": "reversed", "4": "nearly_sorted", "5": "duplicates"}
+            gen_type = g_map.get(g_choice, "random")
 
-        raw_size = input("Размер набора [по умолчанию 15]: ").strip()
-        args = ["gen", "--type", gen_type]
-        if raw_size.isdigit() and int(raw_size) >= 0:
-            args.extend(["--size", raw_size])
+            raw_size = input("Размер набора [по умолчанию 15]: ").strip()
+            args = ["gen", "--type", gen_type]
+            if raw_size.isdigit() and int(raw_size) >= 0:
+                args.extend(["--size", raw_size])
 
-        seed = _ask_seed()
-        if seed is not None:
-            args.extend(["--seed", seed])
+            seed = _ask_seed()
+            if seed is not None:
+                args.extend(["--seed", seed])
 
-        return args
+            return args
 
-    if cmd == "bench":
-        raw_rep = input("Количество повторов [по умолчанию 5]: ").strip()
-        raw_timeout = input(
-            "Лимит отсечки по времени в секундах (число float) [по умолчанию 3.0]: "
-        ).strip()
-        args = ["bench"]
-        if raw_rep.isdigit() and int(raw_rep) > 0:
-            args.extend(["--repeats", raw_rep])
-        if raw_timeout:
-            try:
-                timeout_val = float(raw_timeout.replace(",", "."))
-                if timeout_val > 0:
-                    args.extend(["--timeout", str(timeout_val)])
-            except ValueError:
-                print("Некорректное значение отсечки, будет использовано 3.0 с")
-        seed = _ask_seed()
-        if seed is not None:
-            args.extend(["--seed", seed])
-        else:
-            args.extend(["--seed", str(random.randint(1, 1_000_000))])
-        return args
+        case "bench":
+            raw_rep = input("Количество повторов [по умолчанию 5]: ").strip()
+            raw_timeout = input(
+                "Лимит отсечки по времени в секундах (число float) [по умолчанию 3.0]: "
+            ).strip()
+            raw_workers = input(
+                "Количество параллельных процессов [по умолчанию авто (до 4)]: "
+            ).strip()
+            args = ["bench"]
+            if raw_rep.isdigit() and int(raw_rep) > 0:
+                args.extend(["--repeats", raw_rep])
+            if raw_timeout:
+                try:
+                    timeout_val = float(raw_timeout.replace(",", "."))
+                    if timeout_val > 0:
+                        args.extend(["--timeout", str(timeout_val)])
+                except ValueError:
+                    print("Некорректное значение отсечки, будет использовано 3.0 с")
+            if raw_workers.isdigit() and int(raw_workers) > 0:
+                args.extend(["--workers", raw_workers])
+            seed = _ask_seed()
+            if seed is not None:
+                args.extend(["--seed", seed])
+            else:
+                args.extend(["--seed", str(random.randint(1, 1_000_000))])
+            return args
 
-    return [cmd]
+        case _:
+            return [cmd]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -278,6 +285,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=42,
         help="Seed для воспроизводимости данных (по умолчанию 42)",
     )
+    p_bench.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Количество параллельных процессов (по умолчанию до 4, 1 - последовательно)",
+    )
     p_bench.add_argument("--output", type=str, default="benchmark_results.md")
 
     # подкоманда для тестов
@@ -313,6 +326,7 @@ def main(argv: list[str] | None = None) -> None:
                 max_single_sec=args.timeout,
                 seed=args.seed,
                 output_file=args.output,
+                workers=args.workers,
             )
         case "test":
             _run_tests(args.target)

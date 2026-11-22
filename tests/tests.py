@@ -182,3 +182,15 @@ def test_benchmark_seed_reproducibility():
     assert rows1 == rows2
 
 
+def test_benchmark_parallel_workers():
+    # Проверка работы параллельного запуска (workers=2) против последовательного (workers=1)
+    md_seq = run_benchmark(repeats=1, sizes=(10, 20), max_single_sec=2.0, seed=77, output_file=None, workers=1)
+    md_par = run_benchmark(repeats=1, sizes=(10, 20), max_single_sec=2.0, seed=77, output_file=None, workers=2)
+    assert "| random | 10 | 77 |" in md_par
+    assert "| duplicates | 20 | 77 |" in md_par
+    # Табличные заголовки и строки должны совпадать по структуре
+    rows_seq = [line.split("|")[:4] for line in md_seq.splitlines() if line.startswith("| ")]
+    rows_par = [line.split("|")[:4] for line in md_par.splitlines() if line.startswith("| ")]
+    assert rows_seq == rows_par
+
+

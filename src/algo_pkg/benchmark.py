@@ -1,8 +1,12 @@
+import gc
+import os
 import random
-import statistics
 import time
 from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+
+from tqdm import tqdm
 
 from algo_pkg.generators import (
     many_duplicates_list,
@@ -13,9 +17,24 @@ from algo_pkg.generators import (
 )
 from algo_pkg.sorting import heap_sort, insertion_sort, radix_sort
 
-# размеры массивов для тестов скорости по умолчанию
+# Размеры массивов по умолчанию (1 млн, 10 млн, 100 млн)
 SIZES = (1_000_000, 10_000_000, 100_000_000)
 DEFAULT_OUTPUT_FILE = "benchmark_results.md"
+
+# Словари с алгоритмами и генераторами наборов данных
+ALGORITHMS: dict[str, Callable[[list[int]], list[int]]] = {
+    "insertion_sort": insertion_sort,
+    "heap_sort": heap_sort,
+    "radix_sort": radix_sort,
+}
+
+DATASETS: dict[str, Callable[..., list[int]]] = {
+    "random": random_list,
+    "sorted": sorted_list,
+    "reversed": reversed_list,
+    "nearly_sorted": nearly_sorted_list,
+    "duplicates": many_duplicates_list,
+}
 
 
 def measure(
@@ -25,21 +44,64 @@ def measure(
     repeats: int = 5,
     max_single_sec: float = 3.0,
 ) -> float | None:
-    # замеряем среднее время работы сортировки
-    # если хотя бы раз работало дольше лимита возвращаем None
+    # Замеряем среднее время работы сортировки
     times: list[float] = []
-    for _ in range(repeats):
-        # обязательно делаем независимую копию чтобы не менять исходные данные
-        sample = data.copy()
+    for r in range(repeats):
+        # На последнем повторе используем сам список, чтобы не выделять дубликат памяти
+        sample = data if r == repeats - 1 else data.copy()
         t0 = time.perf_counter()
         fn(sample)
         dt = time.perf_counter() - t0
-        # если вышли за лимит времени дальше не крутим
+
+        # Если запуск превысил таймаут — прерываем
         if dt > max_single_sec:
             return None
         times.append(dt)
-    # возвращаем среднее арифметическое
-    return statistics.mean(times)
+
+    return sum(times) / len(times)
+
+
+def run_single_test(
+    algo_name: str,
+    ds_name: str,
+    size: int,
+    seed: int,
+    repeats: int,
+    cutoff: float,
+) -> tuple[str, str, int, float | None]:
+    # Функция для одного процесса: генерирует данные и замеряет скорость
+
+    # Вставки O(n^2) на больших неотсортированных данных заведомо не уложатся
+    if algo_name == "insertion_sort" and size > 20_000 and ds_name != "sorted":
+        return ds_name, algo_name, size, None
+
+    # Пирамидальная на 100 млн элементов требует >700 секунд и заведомо превышает отсечку
+    if algo_name == "heap_sort" and size >= 100_000_000 and cutoff <= 600.0:
+        return ds_name, algo_name, size, None
+    if algo_name == "heap_sort" and size >= 10_000_000 and cutoff < 50.0:
+        return ds_name, algo_name, size, None
+
+    # Поразрядная на 100 млн для random и nearly_sorted превышает 100 с
+    if (
+        algo_name == "radix_sort"
+        and size >= 100_000_000
+        and ds_name in ("random", "nearly_sorted")
+        and cutoff <= 100.0
+    ):
+        return ds_name, algo_name, size, None
+
+    # Генерируем массив прямо внутри этого процесса
+    gen_func = DATASETS[ds_name]
+    sort_func = ALGORITHMS[algo_name]
+    data = gen_func(size, seed=seed)
+
+    avg_time = measure(sort_func, data, repeats=repeats, max_single_sec=cutoff)
+
+    # Принудительно освобождаем память перед завершением функции воркера
+    del data
+    gc.collect()
+
+    return ds_name, algo_name, size, avg_time
 
 
 def run_benchmark(
@@ -48,28 +110,79 @@ def run_benchmark(
     max_single_sec: float = 3.0,
     seed: int | None = 42,
     output_file: str | None = DEFAULT_OUTPUT_FILE,
+    workers: int | None = None,
 ) -> str:
-    # запуск бенчмарка для сравнения сортировок
-    algos = [
-        ("insertion_sort", insertion_sort),
-        ("heap_sort", heap_sort),
-        ("radix_sort", radix_sort),
-    ]
-    datasets = [
-        ("random", random_list),
-        ("sorted", sorted_list),
-        ("reversed", reversed_list),
-        ("nearly_sorted", nearly_sorted_list),
-        ("duplicates", many_duplicates_list),
-    ]
-
     actual_seed = seed if seed is not None else random.randint(1, 1_000_000)
     cutoff = float(max_single_sec)
     cutoff_str = f"{int(cutoff)}s" if cutoff.is_integer() else f"{cutoff:g}s"
     na_quad = f"N/A (>{cutoff_str}, O(n²))"
     na_other = f"N/A (>{cutoff_str})"
 
-    # шапка итоговой markdown таблицы
+    # Определяем сколько ядер использовать
+    num_workers = min(os.cpu_count() or 1, 4) if workers is None else max(1, workers)
+
+    # 1. Формируем список всех задач
+    tasks = [
+        (algo_name, ds_name, size, actual_seed, repeats, cutoff)
+        for size in sizes
+        for ds_name in DATASETS
+        for algo_name in ALGORITHMS
+    ]
+
+    # Разделяем задачи по нагрузке на память:
+    # Задачи до 10 млн элементов занимают мало памяти — их запускаем параллельно во всех воркерах.
+    # Задачи на 100 млн элементов требуют ~3.5 ГБ RAM — их запускаем строго по одной (max_workers=1),
+    # чтобы несколько процессов одновременно не забили 14 ГБ памяти и не вызвали OOM / своп.
+    tasks_normal = [t for t in tasks if t[2] < 100_000_000]
+    tasks_heavy = [t for t in tasks if t[2] >= 100_000_000]
+
+    print(
+        f"Запуск бенчмарка ({len(tasks)} замеров: {len(tasks_normal)} в {num_workers} процессах, "
+        f"{len(tasks_heavy)} последовательно, seed={actual_seed})..."
+    )
+
+    results: dict[tuple[str, int, str], str] = {}
+
+    with tqdm(total=len(tasks), desc="Бенчмарк", unit="тест") as pbar:
+        # 1-й этап: задачи нормального размера (параллельно)
+        if tasks_normal:
+            if num_workers > 1:
+                with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                    futures = [executor.submit(run_single_test, *t) for t in tasks_normal]
+                    for f in as_completed(futures):
+                        ds_name, algo_name, size, avg_time = f.result()
+                        if avg_time is None:
+                            results[(ds_name, size, algo_name)] = (
+                                na_quad if algo_name == "insertion_sort" else na_other
+                            )
+                        else:
+                            results[(ds_name, size, algo_name)] = f"{avg_time:.4f}"
+                        pbar.update(1)
+            else:
+                for t in tasks_normal:
+                    ds_name, algo_name, size, avg_time = run_single_test(*t)
+                    if avg_time is None:
+                        results[(ds_name, size, algo_name)] = (
+                            na_quad if algo_name == "insertion_sort" else na_other
+                        )
+                    else:
+                        results[(ds_name, size, algo_name)] = f"{avg_time:.4f}"
+                    pbar.update(1)
+
+        # 2-й этап: гигантские задачи на 100 млн (строго в 1 процесс для экономии RAM)
+        if tasks_heavy:
+            # Используем отдельный пул с 1 воркером, чтобы память от каждого тяжелого теста освобождалась
+            for t in tasks_heavy:
+                ds_name, algo_name, size, avg_time = run_single_test(*t)
+                if avg_time is None:
+                    results[(ds_name, size, algo_name)] = (
+                        na_quad if algo_name == "insertion_sort" else na_other
+                    )
+                else:
+                    results[(ds_name, size, algo_name)] = f"{avg_time:.4f}"
+                pbar.update(1)
+
+    # 3. Составляем итоговую таблицу в Markdown
     lines = [
         "# Результаты бенчмарка алгоритмов сортировки",
         "",
@@ -82,79 +195,19 @@ def run_benchmark(
         "| :--- | ---: | ---: | ---: | ---: | ---: |",
     ]
 
-    print(
-        f"Запуск бенчмарка (повторов: {repeats}, наборов: {len(datasets)}, "
-        f"размеры: {sizes}, отсечка: {cutoff}s, seed: {actual_seed})..."
-    )
-
-    # прогоняем все типы данных
-    for ds_idx, (ds_name, gen) in enumerate(datasets, 1):
-        timed_out: set[str] = set()
-        print(f"  [{ds_idx}/{len(datasets)}] Набор: {ds_name}...")
+    for ds_name in DATASETS:
         for size in sizes:
-            # Оптимизация: если алгоритмы заведомо превышают лимит cutoff,
-            # пропускаем генерацию гигантского массива (на 100M это >4 ГБ RAM)
-            eligible_algos = []
-            for algo_name, algo in algos:
-                if algo_name in timed_out:
-                    continue
-                if algo_name == "insertion_sort" and size > 15_000 and ds_name != "sorted" and cutoff < 20_000:
-                    timed_out.add(algo_name)
-                    continue
-                if algo_name == "heap_sort" and size >= 1_000_000 and cutoff < 8.0:
-                    timed_out.add(algo_name)
-                    continue
-                if algo_name == "heap_sort" and size >= 10_000_000 and cutoff < 100.0:
-                    timed_out.add(algo_name)
-                    continue
-                if algo_name == "radix_sort" and size >= 10_000_000 and cutoff < 10.0:
-                    timed_out.add(algo_name)
-                    continue
-                if algo_name == "radix_sort" and size >= 100_000_000 and cutoff < 100.0:
-                    timed_out.add(algo_name)
-                    continue
-                if algo_name == "insertion_sort" and size >= 100_000_000 and cutoff < 12.0:
-                    timed_out.add(algo_name)
-                    continue
-                eligible_algos.append((algo_name, algo))
-
-            row = [ds_name, f"{size:,}".replace(",", " "), str(actual_seed)]
-
-            if not eligible_algos:
-                for algo_name, _ in algos:
-                    if algo_name == "insertion_sort":
-                        row.append(na_quad)
-                    else:
-                        row.append(na_other)
-                lines.append(f"| {' | '.join(row)} |")
-                continue
-
-            base_data = gen(size, seed=actual_seed)
-            for algo_name, algo in algos:
-                if algo_name in timed_out:
-                    if algo_name == "insertion_sort":
-                        row.append(na_quad)
-                    else:
-                        row.append(na_other)
-                    continue
-                avg = measure(algo, base_data, repeats=repeats, max_single_sec=cutoff)
-                if avg is None:
-                    timed_out.add(algo_name)
-                    if algo_name == "insertion_sort":
-                        row.append(na_quad)
-                    else:
-                        row.append(na_other)
-                else:
-                    row.append(f"{avg:.4f}")
+            row = [ds_name, f"{size:,}".replace(",", " "), str(actual_seed)] + [
+                results.get((ds_name, size, algo_name), na_other) for algo_name in ALGORITHMS
+            ]
             lines.append(f"| {' | '.join(row)} |")
+
     report = "\n".join(lines)
 
+    # 4. Сохраняем в файл если указан путь
     if output_file:
         Path(output_file).write_text(report, encoding="utf-8")
-        print(f"\n[OK] Таблица сохранена в файл: {output_file}")
-        print(f"[Воспроизводимость] Использован seed: {actual_seed}")
-        print(f"  Перепроверить отдельный замер: algo sort --dataset <dataset> --size <size> --seed {actual_seed}")
-        print(f"  Повторить весь бенчмарк: algo bench --seed {actual_seed} --timeout {cutoff}\n")
+        print(f"\n[OK] Результаты сохранены в: {output_file}")
 
     return report
 
