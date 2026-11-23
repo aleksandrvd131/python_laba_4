@@ -52,49 +52,67 @@ def heap_sort(items: Iterable[Any], *, key: Callable[[Any], Any] | None = None) 
     return a
 
 
-def radix_sort(arr: Iterable[int], *, bits: int = 8) -> list[int]:
+def radix_sort(
+    items: Iterable[Any],
+    *,
+    key: Callable[[Any], Any] | None = None,
+    bits: int = 8,
+) -> list[Any]:
     # поразрядная сортировка lsd
-    items = list(arr)
-    if len(items) <= 1:
-        return items
+    a = list(items)
+    if len(a) <= 1:
+        return a
 
-    # разделение на отрицательные и положительные
-    neg = [x for x in items if x < 0]
-    pos = [x for x in items if x >= 0]
-
+    k = key if key is not None else (lambda x: x)
     base = 1 << bits
     mask = base - 1
 
-    def sort_unsigned(lst: list[int]) -> list[int]:
+    # сохраняем пары (элемент, числовой ключ)
+    pairs: list[tuple[Any, int]] = []
+    for x in a:
+        val = k(x)
+        # ключ для поразрядной сортировки должен быть целым числом
+        if not isinstance(val, int) or isinstance(val, bool):
+            raise TypeError(f"Ключ radix_sort должен быть целым числом, получен {type(val).__name__}")
+        pairs.append((x, val))
+
+    # разделение на отрицательные и положительные по ключу
+    neg = [p for p in pairs if p[1] < 0]
+    pos = [p for p in pairs if p[1] >= 0]
+
+    def sort_unsigned(lst: list[tuple[Any, int]]) -> list[tuple[Any, int]]:
         if len(lst) <= 1:
             return lst
-        max_val = max(lst)
-        buckets: list[list[int]] = [[] for _ in range(base)]
+        max_val = max(p[1] for p in lst)
+        buckets: list[list[tuple[Any, int]]] = [[] for _ in range(base)]
         cur = lst
+        # проход по разрядам положительных чисел
         for shift in range(0, max_val.bit_length(), bits):
             for b in buckets:
                 b.clear()
-            for x in cur:
-                buckets[(x >> shift) & mask].append(x)
-            cur = [x for b in buckets for x in b]
+            for p in cur:
+                buckets[(p[1] >> shift) & mask].append(p)
+            cur = [p for b in buckets for p in b]
         return cur
 
-    def sort_negatives(lst: list[int]) -> list[int]:
+    def sort_negatives(lst: list[tuple[Any, int]]) -> list[tuple[Any, int]]:
         if len(lst) <= 1:
             return lst
-        min_val = min(lst)
+        min_val = min(p[1] for p in lst)
         # число бит под отрицательные числа
         w = (-min_val).bit_length()
         w = ((w + bits - 1) // bits) * bits
-        buckets: list[list[int]] = [[] for _ in range(base)]
+        buckets: list[list[tuple[Any, int]]] = [[] for _ in range(base)]
         cur = lst
+        # сдвиг для дополнительного кода
         for shift in range(0, w, bits):
             for b in buckets:
                 b.clear()
-            for x in cur:
-                # сдвиг для дополнительного кода
-                buckets[(x >> shift) & mask].append(x)
-            cur = [x for b in buckets for x in b]
+            for p in cur:
+                buckets[(p[1] >> shift) & mask].append(p)
+            cur = [p for b in buckets for p in b]
         return cur
 
-    return sort_negatives(neg) + sort_unsigned(pos)
+    # склеиваем обе части и достаем сами элементы
+    res = sort_negatives(neg) + sort_unsigned(pos)
+    return [p[0] for p in res]

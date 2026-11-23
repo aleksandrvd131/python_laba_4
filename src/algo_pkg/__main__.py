@@ -27,6 +27,14 @@ GENERATORS = {
 # алгоритмы сортировки
 SORTS = {"insertion": insertion_sort, "heap": heap_sort, "radix": radix_sort}
 
+# доступные функции ключа для сортировки в CLI
+KEY_FUNCS = {
+    "none": None,
+    "abs": abs,
+    "neg": lambda x: -x,
+    "mod10": lambda x: abs(x) % 10,
+}
+
 
 def _run_fib(n: int, mode: str) -> None:
     # запуск расчета чисел фибоначчи
@@ -39,18 +47,25 @@ def _run_fib(n: int, mode: str) -> None:
             print(f"recursive({n}) -> RecursionError (превышен лимит стека Python)")
 
 
-def _run_sort(algo: str, dataset: str, size: int, seed: int | None) -> None:
+def _run_sort(algo: str, dataset: str, size: int, seed: int | None, key: str = "none") -> None:
     # запуск сортировки с замером времени и сверкой результата
     actual_seed = seed if seed is not None else random.randint(1, 1_000_000)
     data = GENERATORS[dataset](size, seed=actual_seed)
-    expected = sorted(data)
-    print(f"\nВход ({dataset}, n={size}, seed={actual_seed}):\n{data}")
+    # выбор функции-ключа
+    key_fn = KEY_FUNCS.get(key)
+    if key not in KEY_FUNCS:
+        raise ValueError(f"Неизвестный ключ: {key}")
+
+    expected = sorted(data, key=key_fn)
+    key_info = f", key={key}" if key != "none" else ""
+    print(f"\nВход ({dataset}, n={size}, seed={actual_seed}{key_info}):\n{data}")
 
     targets = SORTS.items() if algo in ("both", "all") else [(algo, SORTS[algo])]
     timings: list[tuple[str, float, float, str]] = []
     for name, fn in targets:
         t0 = time.perf_counter()
-        res = fn(data)
+        # передаем key если он задан
+        res = fn(data, key=key_fn) if key_fn is not None else fn(data)
         dt_sec = time.perf_counter() - t0
         dt_ms = dt_sec * 1000
         # сверка со встроенной сортировкой sorted
@@ -63,7 +78,8 @@ def _run_sort(algo: str, dataset: str, size: int, seed: int | None) -> None:
         print(f"{name:10} [{status}, {dt_ms:.3f} ms / {dt_sec:.6f} с]")
 
     print(f"\n[Воспроизводимость] Чтобы повторить этот же набор, используйте seed={actual_seed}:")
-    print(f"  algo sort --dataset {dataset} --size {size} --seed {actual_seed}")
+    key_flag = f" --key {key}" if key != "none" else ""
+    print(f"  algo sort --dataset {dataset} --size {size} --seed {actual_seed}{key_flag}")
 
 
 def _run_stack(items: list[str]) -> None:
@@ -172,6 +188,20 @@ def _interactive_argv() -> list[str]:
             if raw_size.isdigit() and int(raw_size) >= 0:
                 args.extend(["--size", raw_size])
 
+            # выбор функции-ключа для сортировки
+            print(
+                "\nВыберите функцию ключа (key):\n"
+                "  1 none (по умолчанию, без ключа)\n"
+                "  2 abs (по модулю)\n"
+                "  3 neg (обратный порядок через -x)\n"
+                "  4 mod10 (по последней цифре)"
+            )
+            k_choice = input("Ключ [1-4, по умолчанию 1]: ").strip()
+            k_map = {"1": "none", "2": "abs", "3": "neg", "4": "mod10"}
+            key_choice = k_map.get(k_choice, "none")
+            if key_choice != "none":
+                args.extend(["--key", key_choice])
+
             seed = _ask_seed()
             if seed is not None:
                 args.extend(["--seed", seed])
@@ -256,6 +286,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_sort.add_argument("--dataset", choices=tuple(GENERATORS), default="random")
     p_sort.add_argument("--size", type=int, default=20)
     p_sort.add_argument("--seed", type=int, default=None)
+    p_sort.add_argument(
+        "--key",
+        choices=("none", "abs", "neg", "mod10"),
+        default="none",
+        help="Функция-ключ (none, abs, neg, mod10)",
+    )
 
     # подкоманда для стека
     p_stack = sub.add_parser("stack", help="Проверить стек (LIFO)")
@@ -313,7 +349,7 @@ def main(argv: list[str] | None = None) -> None:
         case "fib":
             _run_fib(args.n, args.mode)
         case "sort":
-            _run_sort(args.algo, args.dataset, args.size, args.seed)
+            _run_sort(args.algo, args.dataset, args.size, args.seed, args.key)
         case "stack":
             _run_stack(args.items)
         case "gen":

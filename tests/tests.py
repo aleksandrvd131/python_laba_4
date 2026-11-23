@@ -63,14 +63,38 @@ def test_sorts_random_matches_builtin(sort_fn, seed):
     assert data == original
 
 
-# проверка работы параметра key и ошибок при несовместимых типах для сортировок на сравнениях
-@pytest.mark.parametrize("sort_fn", COMPARISON_SORTS)
+# проверка работы параметра key и ошибок при несовместимых типах для сортировок
+@pytest.mark.parametrize("sort_fn", ALL_SORTS)
 def test_sort_key_and_type_error(sort_fn):
     assert sort_fn(["bbb", "a", "cc"], key=len) == ["a", "cc", "bbb"]
     assert sort_fn([-10, 2, -5], key=abs) == [2, -5, -10]
 
     with pytest.raises(TypeError):
         sort_fn([1, "two"])  # type: ignore[list-item]
+
+
+# дополнительные проверки параметра key для поразрядной сортировки
+def test_radix_sort_key_variants():
+    # проверка radix_sort с отрицательными ключами (по убыванию)
+    data = [-5, 10, 0, -20, 15]
+    assert radix_sort(data, key=lambda x: -x) == sorted(data, key=lambda x: -x)
+
+    # проверка radix_sort со сложными объектами (кортежи)
+    pairs = [("a", 15), ("b", -3), ("c", 0), ("d", -10), ("e", 4)]
+    assert radix_sort(pairs, key=lambda x: x[1]) == sorted(pairs, key=lambda x: x[1])
+
+    # проверка ошибки если key возвращает не int
+    with pytest.raises(TypeError):
+        radix_sort(["a", "b"], key=lambda x: x)  # возвращает str
+
+
+# проверка вызова сортировки с флагом key через cli
+def test_cli_sort_with_key(capsys):
+    from algo_pkg.__main__ import main
+    main(["sort", "--algo", "all", "--dataset", "random", "--size", "10", "--seed", "42", "--key", "abs"])
+    captured = capsys.readouterr()
+    assert "OK" in captured.out
+    assert "key=abs" in captured.out
 
 
 # проверка поразрядной сортировки с разным размером корзин (bits)

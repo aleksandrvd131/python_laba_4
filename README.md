@@ -11,7 +11,7 @@ uv run algo
 
 # Отдельные подкоманды CLI
 uv run algo fib 10
-uv run algo sort --algo all --dataset random --size 20
+uv run algo sort --algo all --dataset random --size 20 --key abs
 uv run algo stack A B C
 uv run algo gen --type nearly_sorted --size 15
 uv run algo bench --repeats 5 --sizes 100 1000 10000 --workers 4
