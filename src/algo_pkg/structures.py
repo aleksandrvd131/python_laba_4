@@ -3,20 +3,23 @@ class EmptyStackError(IndexError):
     pass
 
 
-class Stack[T]:
-    # реализация LIFO стека на списках
+class Stack:
+    # стек lifo на списке
     def __init__(self) -> None:
-        self.data: list[T] = []
+        self.data: list = []
 
-    def push(self, item: T) -> None:
+    def push(self, item) -> None:
+        # положить элемент на вершину
         self.data.append(item)
 
-    def pop(self) -> T:
+    def pop(self):
+        # достать элемент с вершины
         if not self.data:
             raise EmptyStackError("нельзя делать pop из пустого стека")
         return self.data.pop()
 
-    def peek(self) -> T:
+    def peek(self):
+        # посмотреть верхний элемент
         if not self.data:
             raise EmptyStackError("стек пустой")
         return self.data[-1]

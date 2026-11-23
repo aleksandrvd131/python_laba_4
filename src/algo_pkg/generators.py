@@ -8,31 +8,28 @@ def random_list(
     max_val: int = 100_000_000,
     seed: int | None = None,
 ) -> list[int]:
-    # список случайных чисел
+    # список со случайными числами
     rng = random.Random(seed)
     return [rng.randint(min_val, max_val) for _ in range(n)]
 
 
 def sorted_list(n: int, *, seed: int | None = None) -> list[int]:
-    # отсортированный список
-    _ = seed
+    # уже отсортированный список чисел
     start = -(n // 2)
     return list(range(start, start + n))
 
 
 def reversed_list(n: int, *, seed: int | None = None) -> list[int]:
-    # список наоборот через срез [::-1]
-    _ = seed
+    # список наоборот через срез
     return sorted_list(n)[::-1]
 
 
 def nearly_sorted_list(n: int, *, swaps: int | None = None, seed: int | None = None) -> list[int]:
-    # почти отсортированный список со случайными свапами
+    # почти отсортированный список с перемешанными элементами
     rng = random.Random(seed)
     arr = sorted_list(n)
     if n < 2:
         return arr
-    # если не передали число перестановок, берем 5% от размера
     count = swaps if swaps is not None else max(1, n // 20)
     for _ in range(count):
         i, j = rng.randrange(n), rng.randrange(n)
@@ -41,7 +38,7 @@ def nearly_sorted_list(n: int, *, swaps: int | None = None, seed: int | None = N
 
 
 def many_duplicates_list(n: int, *, unique_values: int = 5, seed: int | None = None) -> list[int]:
-    # список где куча повторяющихся значений
+    # список где много одинаковых чисел
     if n <= 0:
         return []
     rng = random.Random(seed)

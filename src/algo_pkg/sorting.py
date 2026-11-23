@@ -1,16 +1,15 @@
 from collections.abc import Callable, Iterable
 from typing import Any
 
-type KeyFunc[T] = Callable[[T], Any]
 
-
-def insertion_sort[T](items: Iterable[T], *, key: KeyFunc[T] | None = None) -> list[T]:
-    # обычная сортировка вставками
+def insertion_sort(items: Iterable[Any], *, key: Callable[[Any], Any] | None = None) -> list[Any]:
+    # сортировка вставками
     a = list(items)
-    k = key or (lambda x: x)
-    for i, val in enumerate(a[1:], start=1):
+    k = key if key is not None else (lambda x: x)
+    for i in range(1, len(a)):
+        val = a[i]
         j = i - 1
-        # пока элемент слева больше текущего, двигаем его вправо
+        # сдвиг элементов вправо пока они больше val
         while j >= 0 and k(a[j]) > k(val):
             a[j + 1] = a[j]
             j -= 1
@@ -18,41 +17,48 @@ def insertion_sort[T](items: Iterable[T], *, key: KeyFunc[T] | None = None) -> l
     return a
 
 
-def heap_sort[T](items: Iterable[T], *, key: KeyFunc[T] | None = None) -> list[T]:
+def heap_sort(items: Iterable[Any], *, key: Callable[[Any], Any] | None = None) -> list[Any]:
     # пирамидальная сортировка
     a = list(items)
     n = len(a)
-    k = key or (lambda x: x)
+    k = key if key is not None else (lambda x: x)
 
     # просеивание вниз
     def sift_down(root: int, end: int) -> None:
-        while (left := 2 * root + 1) < end:
-            # ищем кто больше - левый или правый потомок (через морж :=)
-            largest = right if (right := left + 1) < end and k(a[right]) > k(a[left]) else left
+        while True:
+            left = 2 * root + 1
+            if left >= end:
+                break
+            largest = left
+            right = left + 1
+            # поиск большего потомка
+            if right < end and k(a[right]) > k(a[left]):
+                largest = right
+
             if k(a[root]) >= k(a[largest]):
                 break
             a[root], a[largest] = a[largest], a[root]
             root = largest
 
-    # строим начальную кучу (reversed(range(...)) вместо сишного range(n//2 - 1, -1, -1))
-    for i in reversed(range(n // 2)):
+    # сборка начальной кучи
+    for i in range(n // 2 - 1, -1, -1):
         sift_down(i, n)
 
-    # вытаскиваем максимум в конец
-    for i in reversed(range(1, n)):
+    # корень кучи в конец
+    for i in range(n - 1, 0, -1):
         a[0], a[i] = a[i], a[0]
         sift_down(0, i)
 
     return a
 
 
-def radix_sort(arr: list[int] | Iterable[int], *, bits: int = 8) -> list[int]:
-    # поразрядная сортировка (LSD)
+def radix_sort(arr: Iterable[int], *, bits: int = 8) -> list[int]:
+    # поразрядная сортировка lsd
     items = list(arr)
     if len(items) <= 1:
         return items
 
-    # делим на отрицательные и неотрицательные (только списки ссылок, без создания новых int в памяти!)
+    # разделение на отрицательные и положительные
     neg = [x for x in items if x < 0]
     pos = [x for x in items if x >= 0]
 
@@ -77,7 +83,7 @@ def radix_sort(arr: list[int] | Iterable[int], *, bits: int = 8) -> list[int]:
         if len(lst) <= 1:
             return lst
         min_val = min(lst)
-        # разрядность максимального по модулю отрицательного числа
+        # число бит под отрицательные числа
         w = (-min_val).bit_length()
         w = ((w + bits - 1) // bits) * bits
         buckets: list[list[int]] = [[] for _ in range(base)]
@@ -86,7 +92,7 @@ def radix_sort(arr: list[int] | Iterable[int], *, bits: int = 8) -> list[int]:
             for b in buckets:
                 b.clear()
             for x in cur:
-                # в питоне сдвиг отрицательных чисел дает биты дополнительного кода
+                # сдвиг для дополнительного кода
                 buckets[(x >> shift) & mask].append(x)
             cur = [x for b in buckets for x in b]
         return cur

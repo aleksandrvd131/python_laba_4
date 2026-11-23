@@ -17,11 +17,11 @@ from algo_pkg.generators import (
 )
 from algo_pkg.sorting import heap_sort, insertion_sort, radix_sort
 
-# Размеры массивов по умолчанию (1 млн, 10 млн, 100 млн)
+# размеры массивов по умолчанию (1 млн, 10 млн, 100 млн)
 SIZES = (1_000_000, 10_000_000, 100_000_000)
 DEFAULT_OUTPUT_FILE = "benchmark_results.md"
 
-# Словари с алгоритмами и генераторами наборов данных
+# словари с алгоритмами и генераторами
 ALGORITHMS: dict[str, Callable[[list[int]], list[int]]] = {
     "insertion_sort": insertion_sort,
     "heap_sort": heap_sort,
@@ -44,16 +44,16 @@ def measure(
     repeats: int = 5,
     max_single_sec: float = 3.0,
 ) -> float | None:
-    # Замеряем среднее время работы сортировки
+    # замер среднего времени работы сортировки
     times: list[float] = []
     for r in range(repeats):
-        # На последнем повторе используем сам список, чтобы не выделять дубликат памяти
+        # на последнем повторе без копии списка чтобы экономить память
         sample = data if r == repeats - 1 else data.copy()
         t0 = time.perf_counter()
         fn(sample)
         dt = time.perf_counter() - t0
 
-        # Если запуск превысил таймаут — прерываем
+        # выход если превышен лимит времени
         if dt > max_single_sec:
             return None
         times.append(dt)
@@ -69,19 +69,19 @@ def run_single_test(
     repeats: int,
     cutoff: float,
 ) -> tuple[str, str, int, float | None]:
-    # Функция для одного процесса: генерирует данные и замеряет скорость
+    # запуск теста для одного процесса
 
-    # Вставки O(n^2) на больших неотсортированных данных заведомо не уложатся
+    # вставки на больших массивах отсекаются из-за квадратичной сложности
     if algo_name == "insertion_sort" and size > 20_000 and ds_name != "sorted":
         return ds_name, algo_name, size, None
 
-    # Пирамидальная на 100 млн элементов требует >700 секунд и заведомо превышает отсечку
+    # куча на 100 млн не уложится в лимит времени
     if algo_name == "heap_sort" and size >= 100_000_000 and cutoff <= 600.0:
         return ds_name, algo_name, size, None
     if algo_name == "heap_sort" and size >= 10_000_000 and cutoff < 50.0:
         return ds_name, algo_name, size, None
 
-    # Поразрядная на 100 млн для random и nearly_sorted превышает 100 с
+    # радикс на 100 млн для случайных тоже превысит лимит
     if (
         algo_name == "radix_sort"
         and size >= 100_000_000
@@ -90,14 +90,14 @@ def run_single_test(
     ):
         return ds_name, algo_name, size, None
 
-    # Генерируем массив прямо внутри этого процесса
+    # генерация массива внутри отдельного процесса
     gen_func = DATASETS[ds_name]
     sort_func = ALGORITHMS[algo_name]
     data = gen_func(size, seed=seed)
 
     avg_time = measure(sort_func, data, repeats=repeats, max_single_sec=cutoff)
 
-    # Принудительно освобождаем память перед завершением функции воркера
+    # очистка памяти процесса
     del data
     gc.collect()
 
@@ -118,10 +118,10 @@ def run_benchmark(
     na_quad = f"N/A (>{cutoff_str}, O(n²))"
     na_other = f"N/A (>{cutoff_str})"
 
-    # Определяем сколько ядер использовать
+    # количество процессов
     num_workers = min(os.cpu_count() or 1, 4) if workers is None else max(1, workers)
 
-    # 1. Формируем список всех задач
+    # список всех задач
     tasks = [
         (algo_name, ds_name, size, actual_seed, repeats, cutoff)
         for size in sizes
@@ -129,10 +129,7 @@ def run_benchmark(
         for algo_name in ALGORITHMS
     ]
 
-    # Разделяем задачи по нагрузке на память:
-    # Задачи до 10 млн элементов занимают мало памяти — их запускаем параллельно во всех воркерах.
-    # Задачи на 100 млн элементов требуют ~3.5 ГБ RAM — их запускаем строго по одной (max_workers=1),
-    # чтобы несколько процессов одновременно не забили 14 ГБ памяти и не вызвали OOM / своп.
+    # разделение задач: задачи на 100 млн по очереди чтобы не забить оперативку
     tasks_normal = [t for t in tasks if t[2] < 100_000_000]
     tasks_heavy = [t for t in tasks if t[2] >= 100_000_000]
 
@@ -144,7 +141,7 @@ def run_benchmark(
     results: dict[tuple[str, int, str], str] = {}
 
     with tqdm(total=len(tasks), desc="Бенчмарк", unit="тест") as pbar:
-        # 1-й этап: задачи нормального размера (параллельно)
+        # запуск обычных задач параллельно
         if tasks_normal:
             if num_workers > 1:
                 with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -169,9 +166,9 @@ def run_benchmark(
                         results[(ds_name, size, algo_name)] = f"{avg_time:.4f}"
                     pbar.update(1)
 
-        # 2-й этап: гигантские задачи на 100 млн (строго в 1 процесс для экономии RAM)
+        # тяжелые задачи на 100 млн по одной
         if tasks_heavy:
-            # Используем отдельный пул с 1 воркером, чтобы память от каждого тяжелого теста освобождалась
+            # по очереди чтобы не забить оперативку
             for t in tasks_heavy:
                 ds_name, algo_name, size, avg_time = run_single_test(*t)
                 if avg_time is None:
@@ -182,7 +179,7 @@ def run_benchmark(
                     results[(ds_name, size, algo_name)] = f"{avg_time:.4f}"
                 pbar.update(1)
 
-    # 3. Составляем итоговую таблицу в Markdown
+    # итоговая таблица
     lines = [
         "# Результаты бенчмарка алгоритмов сортировки",
         "",
@@ -204,7 +201,7 @@ def run_benchmark(
 
     report = "\n".join(lines)
 
-    # 4. Сохраняем в файл если указан путь
+    # запись в файл если передан путь
     if output_file:
         Path(output_file).write_text(report, encoding="utf-8")
         print(f"\n[OK] Результаты сохранены в: {output_file}")

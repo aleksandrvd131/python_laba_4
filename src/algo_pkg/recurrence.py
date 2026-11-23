@@ -1,13 +1,13 @@
 def _check_n(n: int) -> None:
-    # ловушка питона bool это наследник int, проверяем строго через type
-    if type(n) is not int:
-        raise TypeError("n должно быть int, никаких флоатов и булов")
+    # проверка типа n (строго int, не bool)
+    if not isinstance(n, int) or isinstance(n, bool):
+        raise TypeError("n должно быть целым числом (int)")
     if n < 0:
         raise ValueError("n не может быть меньше нуля")
 
 
 def fibonacci_iterative(n: int) -> int:
-    # обычный цикл
+    # цикл для подсчета
     _check_n(n)
     a, b = 0, 1
     for _ in range(n):
@@ -15,11 +15,12 @@ def fibonacci_iterative(n: int) -> int:
     return a
 
 
-def fibonacci_recursive(n: int) -> int:
-    # рекурсия с аккумулятором чтобы не лагало
-    _check_n(n)
-
-    def helper(k: int, a: int = 0, b: int = 1) -> int:
-        return a if k == 0 else helper(k - 1, b, a + b)
-
-    return helper(n)
+def fibonacci_recursive(n: int, a: int = 0, b: int = 1) -> int:
+    # рекурсия с аккумулятором
+    if a == 0 and b == 1:
+        _check_n(n)
+    # базовый случай
+    if n == 0:
+        return a
+    # шаг рекурсии
+    return fibonacci_recursive(n - 1, b, a + b)

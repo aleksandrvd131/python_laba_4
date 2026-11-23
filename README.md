@@ -16,6 +16,9 @@ uv run algo stack A B C
 uv run algo gen --type nearly_sorted --size 15
 uv run algo bench --repeats 5 --sizes 100 1000 10000 --workers 4
 uv run algo test all
+
+# Запуск автотестов
+uv run pytest
 ```
 
 ## 2. Анализ сложности алгоритмов и структур данных

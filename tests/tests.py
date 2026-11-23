@@ -84,7 +84,7 @@ def test_radix_sort_bits_and_stability(bits):
 
 # проверка базовых операций со стеком и ошибок
 def test_stack_operations_and_errors():
-    s = Stack[int]()
+    s = Stack()
     assert not s
     assert len(s) == 0
 
@@ -106,17 +106,17 @@ def test_stack_operations_and_errors():
 
 # проверка инварианта LIFO когда элементы выходят в обратном порядке
 def test_stack_lifo_invariant():
-    s = Stack[int]()
+    s = Stack()
     items = [10, -5, 0, 42, 10]
 
-    # закидываем по одному и проверяем вершину
+    # добавление по одному и проверка вершины
     for idx, x in enumerate(items):
         s.push(x)
         assert len(s) == idx + 1
         assert s.peek() == x
         assert len(s) == idx + 1
 
-    # достаем все обратно и проверяем обратный порядок
+    # извлечение всех элементов обратно
     popped = [s.pop() for _ in range(len(items))]
     assert popped == list(reversed(items))
     assert len(s) == 0
@@ -156,7 +156,7 @@ def test_benchmark_measure_and_isolation():
 
 def test_benchmark_timeout_trigger():
     data = list(range(1000, 0, -1))
-    # ставим микроскопический лимит времени чтобы спровоцировать отсечку
+    # минимальный лимит времени для отсечки
     avg = measure(insertion_sort, data, repeats=2, max_single_sec=0.000000001)
     assert avg is None
 
@@ -175,8 +175,7 @@ def test_benchmark_seed_reproducibility():
     md2 = run_benchmark(repeats=1, sizes=(10,), max_single_sec=2.5, seed=12345, output_file=None)
     assert "| random | 10 | 12345 |" in md1
     assert "Seed:** 12345" in md1
-    # Сравниваем структуру строк (Dataset, Size, Seed), так как физическое время выполнения
-    # может незначительно колебаться на уровне микросекунд между запусками
+    # проверка структуры строк (dataset, size, seed) без учета миллисекунд
     rows1 = [line.split("|")[:4] for line in md1.splitlines() if line.startswith("| ")]
     rows2 = [line.split("|")[:4] for line in md2.splitlines() if line.startswith("| ")]
     assert rows1 == rows2

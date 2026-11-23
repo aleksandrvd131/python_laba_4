@@ -53,7 +53,7 @@ def _run_sort(algo: str, dataset: str, size: int, seed: int | None) -> None:
         res = fn(data)
         dt_sec = time.perf_counter() - t0
         dt_ms = dt_sec * 1000
-        # сверяем результат со стандартной сортировкой питона
+        # сверка со встроенной сортировкой sorted
         status = "OK" if res == expected else "MISMATCH"
         print(f"{name:10} [{status}, {dt_ms:.3f} ms / {dt_sec:.6f} с]: {res}")
         timings.append((name, dt_sec, dt_ms, status))
@@ -67,17 +67,17 @@ def _run_sort(algo: str, dataset: str, size: int, seed: int | None) -> None:
 
 
 def _run_stack(items: list[str]) -> None:
-    # проверка работы со стеком
-    stack = Stack[str]()
+    # проверка работы стека
+    stack = Stack()
     print(f"Пустой стек: bool={bool(stack)}, len={len(stack)}")
-    # последовательно закидываем элементы
+    # добавление элементов по очереди
     for item in items:
         stack.push(item)
         print(f"push({item!r}) -> peek={stack.peek()!r}, len={len(stack)}")
-    # вытаскиваем пока не опустеет
+    # извлечение до пустого стека
     while stack:
         print(f"pop() -> {stack.pop()!r}, len={len(stack)}")
-    # проверяем обработку ошибки на пустом стеке
+    # проверка исключения на пустом стеке
     try:
         stack.pop()
     except EmptyStackError as exc:
@@ -303,12 +303,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     # точка входа
     raw_args = sys.argv[1:] if argv is None else argv
-    # если ничего не передали запускаем менюшку
+    # если ничего не передали - интерактивное меню
     if not raw_args:
         raw_args = _interactive_argv()
 
     args = build_parser().parse_args(raw_args)
-    # вызываем нужную команду по названию
+    # вызов команды по названию
     match args.cmd:
         case "fib":
             _run_fib(args.n, args.mode)
