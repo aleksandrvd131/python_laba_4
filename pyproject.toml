@@ -5,7 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "algo-pkg"
 readme = "README.md"
-requires-python = ">=3.10"
+version = "1.0.0"
+requires-python = ">=3.15"
 dependencies = [
     "tqdm>=4.60.0",
 ]
